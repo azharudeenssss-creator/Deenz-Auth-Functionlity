@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deenz stamper- Full Stack Auth System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/otpauth@9.2.2/dist/otpauth.umd.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .dark .glass-panel {
+            background: rgba(17, 24, 39, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .input-group { position: relative; }
+        .input-group input:focus ~ label,
+        .input-group input:not(:placeholder-shown) ~ label {
+            transform: translateY(-1.5rem) scale(0.85);
+            color: #4F46E5;
+        }
+        
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .strength-meter div { height: 4px; border-radius: 2px; transition: all 0.3s; }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #297d13;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .toast {
+            transform: translateX(100%);
+            transition: transform 0.3s ease-out;
+        }
+        .toast.show { transform: translateX(0); }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800 min-h-screen flex items-center justify-center p-4 transition-colors duration-300">
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Main Container -->
+    <div class="w-full max-w-md">
+        
+        <!-- Header / Logo -->
+        <div class="text-center mb-8 fade-in">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white mb-4 shadow-lg shadow-indigo-500/30">
+                <i class="fas fa-shield-halved text-3xl"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-slate-800 dark:text-white mb-2">TradeGENIUZ Auth</h1>
+            <p class="text-slate-500 dark:text-slate-400">Enterprise-grade authentication</p>
+        </div>
+
+        <!-- Auth Card -->
+        <div class="glass-panel rounded-2xl shadow-2xl p-8 fade-in" style="animation-delay: 0.1s">
+            
+            <!-- Navigation Tabs -->
+            <div class="flex space-x-1 rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-8">
+                <button onclick="switchTab('login')" id="tab-login" class="w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-indigo-700 bg-white shadow dark:bg-slate-700 dark:text-white transition-all">
+                    Sign In
+                </button>
+                <button onclick="switchTab('register')" id="tab-register" class="w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-slate-600 hover:bg-white/[0.5] hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700/50 transition-all">
+                    Register
+                </button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="space-y-5" onsubmit="handleLogin(event)">
+                <div class="input-group">
+                    <input type="email" id="loginEmail" required placeholder=" " 
+                        class="peer w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        autocomplete="email">
+                    <label for="loginEmail" class="absolute left-4 top-3 text-slate-500 dark:text-slate-400 transition-all pointer-events-none bg-white dark:bg-slate-900 px-1">
+                        Email Address
+                    </label>
+                </div>
+
+                <div class="input-group">
+                    <input type="password" id="loginPassword" required placeholder=" " 
+                        class="peer w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all pr-10"
+                        autocomplete="current-password">
+                    <label for="loginPassword" class="absolute left-4 top-3 text-slate-500 dark:text-slate-400 transition-all pointer-events-none bg-white dark:bg-slate-900 px-1">
+                        Password
+                    </label>
+                    <button type="button" onclick="togglePassword('loginPassword', this)" class="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between text-sm">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-slate-600 dark:text-slate-400">Remember me</span>
+                    </label>
+                    <a href="#" onclick="showForgotPassword()" class="text-indigo-600 hover:text-indigo-500 font-medium">Forgot password?</a>
+                </div>
+
+                <button type="submit" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-lg shadow-indigo-500/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2">
+                    <span>Sign In</span>
+                    <div class="loader hidden" id="loginLoader"></div>
+                </button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" class="space-y-5 hidden" onsubmit="handleRegister(event)">
+                <div class="input-group">
+                    <input type="text" id="regName" required placeholder=" " 
+                        class="peer w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    <label for="regName" class="absolute left-4 top-3 text-slate-500 dark:text-slate-400 transition-all pointer-events-none bg-white dark:bg-slate-900 px-1">
+                        Full Name
+                    </label>
+                </div>
+
+                <div class="input-group">
+                    <input type="email" id="regEmail" required placeholder=" " 
+                        class="peer w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    <label for="regEmail" class="absolute left-4 top-3 text-slate-500 dark:text-slate-400 transition-all pointer-events-none bg-white dark:bg-slate-900 px-1">
+                        Email Address
+                    </label>
+                </div>
+
+                <div class="input-group">
+                    <input type="password" id="regPassword" required placeholder=" " oninput="checkPasswordStrength(this.value)"
+                        class="peer w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all pr-10">
+                    <label for="regPassword" class="absolute left-4 top-3 text-slate-500 dark:text-slate-400 transition-all pointer-events-none bg-white dark:bg-slate-900 px-1">
+                        Password
+                    </label>
+                    <button type="button" onclick="togglePassword('regPassword', this)" class="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+
+                <!-- Password Strength Meter -->
+                <div class="space-y-2" id="strengthContainer" style="display: none;">
+                    <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>Password strength</span>
+                        <span id="strengthText">Weak</span>
+                    </div>
+                    <div class="strength-meter flex space-x-1">
+                        <div class="flex-1 bg-slate-200 dark:bg-slate-700" id="strength1"></div>
+                        <div class="flex-1 bg-slate-200 dark:bg-slate-700" id="strength2"></div>
+                        <div class="flex-1 bg-slate-200 dark:bg-slate-700" id="strength3"></div>
+                        <div class="flex-1 bg-slate-200 dark:bg-slate-700" id="strength4"></div>
+                    </div>
+                    <ul class="text-xs text-slate-500 dark:text-slate-400 space-y-1 mt-2">
+                        <li id="req-length"><i class="fas fa-circle text-[6px] mr-1"></i> At least 8 characters</li>
+                        <li id="req-upper"><i class="fas fa-circle text-[6px] mr-1"></i> One uppercase letter</li>
+                        <li id="req-number"><i class="fas fa-circle text-[6px] mr-1"></i> One number</li>
+                        <li id="req-special"><i class="fas fa-circle text-[6px] mr-1"></i> One special character</li>
+                    </ul>
+                </div>
+
+                <div class="input-group">
+                    <input type="password" id="regConfirmPassword" required placeholder=" " 
+                        class="peer w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+                    <label for="regConfirmPassword" class="absolute left-4 top-3 text-slate-500 dark:text-slate-400 transition-all pointer-events-none bg-white dark:bg-slate-900 px-1">
+                        Confirm Password
+                    </label>
+                </div>
+
+                <div class="flex items-start space-x-2 text-sm">
+                    <input type="checkbox" id="terms" required class="mt-1 w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="terms" class="text-slate-600 dark:text-slate-400">
+                        I agree to the <a href="#" class="text-indigo-600 hover:underline">Terms of Service</a> and <a href="#" class="text-indigo-600 hover:underline">Privacy Policy</a>
+                    </label>
+                </div>
+
+                <button type="submit" id="regBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-lg shadow-indigo-500/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2">
+                    <span>Create Account</span>
+                    <div class="loader hidden" id="regLoader"></div>
+                </button>
+            </form>
+
+            <!-- 2FA Verification Form -->
+            <form id="twoFAForm" class="space-y-5 hidden text-center" onsubmit="handle2FAVerify(event)">
+                <div class="mb-6">
+                    <div class="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-mobile-screen-button text-2xl text-indigo-600 dark:text-indigo-400"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Two-Factor Authentication</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Enter the 6-digit code from your authenticator app</p>
+                </div>
+
+                <div class="flex justify-center space-x-2">
+                    <input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-0 otp-input" onkeyup="moveToNext(this, 0)" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-0 otp-input" onkeyup="moveToNext(this, 1)" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-0 otp-input" onkeyup="moveToNext(this, 2)" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-0 otp-input" onkeyup="moveToNext(this, 3)" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-0 otp-input" onkeyup="moveToNext(this, 4)" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-0 otp-input" onkeyup="moveToNext(this, 5)" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                </div>
+
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-lg shadow-indigo-500/30 transition-all">
+                    Verify Code
+                </button>
+                
+                <button type="button" onclick="cancel2FA()" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">
+                    Use different method
+                </button>
+            </form>
+
+            <!-- Setup 2FA Form -->
+            <div id="setup2FAForm" class="hidden text-center space-y-5">
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Setup Authenticator</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Scan this QR code with your app</p>
+                </div>
+                
+                <div class="bg-white p-4 rounded-xl inline-block shadow-inner" id="qrcode"></div>
+                
+                <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-3 flex items-center justify-between">
+                    <code class="text-sm text-slate-700 dark:text-slate-300 font-mono" id="secretKey"></code>
+                    <button onclick="copySecret()" class="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+
+                <form onsubmit="verifySetup2FA(event)" class="space-y-3">
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Enter the code from your app to verify</p>
+                    <input type="text" id="setupCode" maxlength="6" placeholder="000000" 
+                        class="w-full px-4 py-3 text-center text-2xl font-bold tracking-widest rounded-lg border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-lg shadow-green-500/30 transition-all">
+                        Verify & Enable 2FA
+                    </button>
+                </form>
+            </div>
+
+            <!-- Dashboard / Profile -->
+            <div id="dashboard" class="hidden space-y-6">
+                <div class="flex items-center space-x-4 pb-6 border-b border-slate-200 dark:border-slate-700">
+                    <div class="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold" id="userAvatar">
+                        U
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900 dark:text-white" id="userName">User</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400" id="userEmail">user@example.com</p>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 mt-1">
+                            <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
+                            Active
+                        </span>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                <i class="fas fa-shield-halved"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-slate-900 dark:text-white">Two-Factor Auth</p>
+                                <p class="text-xs text-slate-500" id="twoFAStatus">Not enabled</p>
+                            </div>
+                        </div>
+                        <button onclick="toggle2FA()" id="toggle2FABtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
+                            Enable
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                                <i class="fas fa-key"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-slate-900 dark:text-white">Session Token</p>
+                                <p class="text-xs text-slate-500 font-mono" id="tokenPreview">None</p>
+                            </div>
+                        </div>
+                        <button onclick="refreshToken()" class="text-slate-400 hover:text-indigo-600 transition-colors" title="Refresh Token">
+                            <i class="fas fa-rotate"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-slate-900 dark:text-white">Token Expires</p>
+                                <p class="text-xs text-slate-500" id="tokenExpiry">--</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="logout()" class="w-full mt-6 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold py-3 rounded-lg transition-all flex items-center justify-center space-x-2">
+                    <i class="fas fa-right-from-bracket"></i>
+                    <span>Sign Out</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-slate-400 dark:text-slate-600 text-sm mt-8">
+            Protected by SecureAuth Engine
+        </p>
+    </div>
+
+    <script>
+        // ==================== BACKEND SIMULATION ====================
+        
+        const Backend = {
+            users: new Map(), // email -> user object
+            sessions: new Map(), // token -> session data
+            secretKey: 'super-secret-jwt-key-demo-' + Math.random().toString(36).substring(2),
+            
+            // Simulated bcrypt hash
+            async hashPassword(password) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(password + this.secretKey);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            },
+
+            async verifyPassword(password, hash) {
+                const computed = await this.hashPassword(password);
+                return computed === hash;
+            },
+
+            generateToken(userId, type = 'access') {
+                const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+                const now = Math.floor(Date.now() / 1000);
+                const expiry = type === 'access' ? now + 900 : now + 604800; // 15 min or 7 days
+                const payload = btoa(JSON.stringify({ 
+                    sub: userId, 
+                    iat: now, 
+                    exp: expiry, 
+                    type,
+                    jti: Math.random().toString(36).substring(2) 
+                }));
+                const signature = btoa(header + '.' + payload + this.secretKey);
+                return `${header}.${payload}.${signature}`;
+            },
+
+            verifyToken(token) {
+                try {
+                    const [header, payload, signature] = token.split('.');
+                    const expectedSig = btoa(header + '.' + payload + this.secretKey);
+                    if (signature !== expectedSig) return null;
+                    
+                    const data = JSON.parse(atob(payload));
+                    if (data.exp < Math.floor(Date.now() / 1000)) return null;
+                    return data;
+                } catch (e) {
+                    return null;
+                }
+            },
+
+            async register(name, email, password) {
+                await new Promise(r => setTimeout(r, 800)); // Simulate network
+                
+                if (this.users.has(email)) {
+                    return { success: false, error: 'Email already registered' };
+                }
+
+                const user = {
+                    id: 'user_' + Math.random().toString(36).substring(2, 9),
+                    name,
+                    email,
+                    password: await this.hashPassword(password),
+                    twoFAEnabled: false,
+                    twoFASecret: null,
+                    createdAt: new Date().toISOString()
+                };
+
+                this.users.set(email, user);
+                return { success: true, user: { ...user, password: undefined } };
+            },
+
+            async login(email, password) {
+                await new Promise(r => setTimeout(r, 600));
+                
+                const user = this.users.get(email);
+                if (!user) return { success: false, error: 'Invalid credentials' };
+                
+                const valid = await this.verifyPassword(password, user.password);
+                if (!valid) return { success: false, error: 'Invalid credentials' };
+
+                if (user.twoFAEnabled) {
+                    return { success: true, requires2FA: true, userId: user.id, email: user.email };
+                }
+
+                const accessToken = this.generateToken(user.id, 'access');
+                const refreshToken = this.generateToken(user.id, 'refresh');
+                
+                this.sessions.set(accessToken, { userId: user.id, createdAt: new Date() });
+                
+                return { 
+                    success: true, 
+                    accessToken, 
+                    refreshToken,
+                    user: { ...user, password: undefined }
+                };
+            },
+
+            async verify2FA(userId, code) {
+                await new Promise(r => setTimeout(r, 400));
+                const user = Array.from(this.users.values()).find(u => u.id === userId);
+                if (!user || !user.twoFAEnabled) return { success: false, error: '2FA not configured' };
+
+                const totp = new OTPAuth.TOTP({
+                    secret: OTPAuth.Secret.fromBase32(user.twoFASecret),
+                    digits: 6,
+                    period: 30
+                });
+
+                const delta = totp.validate({ token: code, window: 1 });
+                if (delta === null) return { success: false, error: 'Invalid code' };
+
+                const accessToken = this.generateToken(user.id, 'access');
+                const refreshToken = this.generateToken(user.id, 'refresh');
+                this.sessions.set(accessToken, { userId: user.id, createdAt: new Date() });
+
+                return { 
+                    success: true, 
+                    accessToken, 
+                    refreshToken,
+                    user: { ...user, password: undefined }
+                };
+            },
+
+            async setup2FA(userId) {
+                const user = Array.from(this.users.values()).find(u => u.id === userId);
+                if (!user) return { success: false, error: 'User not found' };
+
+                const secret = new OTPAuth.Secret({ size: 20 });
+                const totp = new OTPAuth.TOTP({
+                    secret: secret,
+                    issuer: 'SecureAuth',
+                    label: user.email,
+                    digits: 6,
+                    period: 30
+                });
+
+                return {
+                    success: true,
+                    secret: secret.base32,
+                    uri: totp.toString()
+                };
+            },
+
+            async confirm2FASetup(userId, code, secret) {
+                const user = Array.from(this.users.values()).find(u => u.id === userId);
+                if (!user) return { success: false, error: 'User not found' };
+
+                const totp = new OTPAuth.TOTP({
+                    secret: OTPAuth.Secret.fromBase32(secret),
+                    digits: 6,
+                    period: 30
+                });
+
+                const delta = totp.validate({ token: code, window: 1 });
+                if (delta === null) return { success: false, error: 'Invalid verification code' };
+
+                user.twoFAEnabled = true;
+                user.twoFASecret = secret;
+                return { success: true };
+            },
+
+            async disable2FA(userId) {
+                const user = Array.from(this.users.values()).find(u => u.id === userId);
+                if (!user) return { success: false, error: 'User not found' };
+                user.twoFAEnabled = false;
+                user.twoFASecret = null;
+                return { success: true };
+            },
+
+            async refreshAccessToken(refreshToken) {
+                const data = this.verifyToken(refreshToken);
+                if (!data || data.type !== 'refresh') return { success: false, error: 'Invalid token' };
+                
+                const accessToken = this.generateToken(data.sub, 'access');
+                this.sessions.set(accessToken, { userId: data.sub, createdAt: new Date() });
+                return { success: true, accessToken };
+            },
+
+            getUserByToken(token) {
+                const data = this.verifyToken(token);
+                if (!data) return null;
+                return Array.from(this.users.values()).find(u => u.id === data.sub);
+            }
+        };
+
+        // ==================== FRONTEND STATE ====================
+
+        let currentUser = null;
+        let temp2FAUserId = null;
+        let temp2FAEmail = null;
+        let pending2FASecret = null;
+        let tokenRefreshInterval = null;
+
+        // ==================== UI HELPERS ====================
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500',
+                warning: 'bg-yellow-500'
+            };
+            
+            toast.className = `toast ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 min-w-[300px]`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                <span class="font-medium">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            const loader = btn.querySelector('.loader');
+            const text = btn.querySelector('span');
+            
+            if (loading) {
+                loader.classList.remove('hidden');
+                text.classList.add('opacity-0');
+                btn.disabled = true;
+            } else {
+                loader.classList.add('hidden');
+                text.classList.remove('opacity-0');
+                btn.disabled = false;
+            }
+        }
+
+        function switchTab(tab) {
+            const loginForm = document.getElementById('loginForm');
+            const regForm = document.getElementById('registerForm');
+            const loginTab = document.getElementById('tab-login');
+            const regTab = document.getElementById('tab-register');
+            const twoFAForm = document.getElementById('twoFAForm');
+            const setup2FA = document.getElementById('setup2FAForm');
+            const dashboard = document.getElementById('dashboard');
+
+            // Reset all
+            [loginForm, regForm, twoFAForm, setup2FA, dashboard].forEach(el => el.classList.add('hidden'));
+            
+            if (tab === 'login') {
+                loginForm.classList.remove('hidden');
+                loginTab.classList.add('bg-white', 'shadow', 'dark:bg-slate-700', 'text-indigo-700', 'dark:text-white');
+                loginTab.classList.remove('text-slate-600', 'hover:bg-white/[0.5]', 'dark:text-slate-400');
+                regTab.classList.remove('bg-white', 'shadow', 'dark:bg-slate-700', 'text-indigo-700', 'dark:text-white');
+                regTab.classList.add('text-slate-600', 'hover:bg-white/[0.5]', 'dark:text-slate-400');
+            } else if (tab === 'register') {
+                regForm.classList.remove('hidden');
+                regTab.classList.add('bg-white', 'shadow', 'dark:bg-slate-700', 'text-indigo-700', 'dark:text-white');
+                regTab.classList.remove('text-slate-600', 'hover:bg-white/[0.5]', 'dark:text-slate-400');
+                loginTab.classList.remove('bg-white', 'shadow', 'dark:bg-slate-700', 'text-indigo-700', 'dark:text-white');
+                loginTab.classList.add('text-slate-600', 'hover:bg-white/[0.5]', 'dark:text-slate-400');
+            } else if (tab === '2fa') {
+                twoFAForm.classList.remove('hidden');
+                loginTab.parentElement.classList.add('hidden');
+            } else if (tab === 'setup2fa') {
+                setup2FA.classList.remove('hidden');
+                loginTab.parentElement.classList.add('hidden');
+            } else if (tab === 'dashboard') {
+                dashboard.classList.remove('hidden');
+                loginTab.parentElement.classList.add('hidden');
+            }
+        }
+
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        function checkPasswordStrength(password) {
+            const container = document.getElementById('strengthContainer');
+            container.style.display = password.length > 0 ? 'block' : 'none';
+            
+            let score = 0;
+            const checks = {
+                length: password.length >= 8,
+                upper: /[A-Z]/.test(password),
+                number: /[0-9]/.test(password),
+                special: /[^A-Za-z0-9]/.test(password)
+            };
+
+            // Update requirement indicators
+            document.getElementById('req-length').innerHTML = `<i class="fas ${checks.length ? 'fa-check text-green-500' : 'fa-circle text-[6px]'} mr-1"></i> At least 8 characters`;
+            document.getElementById('req-upper').innerHTML = `<i class="fas ${checks.upper ? 'fa-check text-green-500' : 'fa-circle text-[6px]'} mr-1"></i> One uppercase letter`;
+            document.getElementById('req-number').innerHTML = `<i class="fas ${checks.number ? 'fa-check text-green-500' : 'fa-circle text-[6px]'} mr-1"></i> One number`;
+            document.getElementById('req-special').innerHTML = `<i class="fas ${checks.special ? 'fa-check text-green-500' : 'fa-circle text-[6px]'} mr-1"></i> One special character`;
+
+            score = Object.values(checks).filter(Boolean).length;
+            
+            const bars = [1, 2, 3, 4].map(i => document.getElementById(`strength${i}`));
+            const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+            const texts = ['Weak', 'Fair', 'Good', 'Strong'];
+            
+            bars.forEach((bar, idx) => {
+                if (idx < score) {
+                    bar.className = `flex-1 ${colors[score - 1]}`;
+                } else {
+                    bar.className = 'flex-1 bg-slate-200 dark:bg-slate-700';
+                }
+            });
+            
+            document.getElementById('strengthText').textContent = texts[score - 1] || 'Weak';
+            document.getElementById('strengthText').className = score > 0 ? `text-${['red','orange','yellow','green'][score-1]}-500 font-medium` : 'text-slate-500';
+        }
+
+        // ==================== AUTH HANDLERS ====================
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regConfirmPassword').value;
+
+            if (password !== confirm) {
+                showToast('Passwords do not match', 'error');
+                document.getElementById('registerForm').classList.add('shake');
+                setTimeout(() => document.getElementById('registerForm').classList.remove('shake'), 500);
+                return;
+            }
+
+            if (password.length < 8) {
+                showToast('Password must be at least 8 characters', 'error');
+                return;
+            }
+
+            setLoading('regBtn', true);
+            const result = await Backend.register(name, email, password);
+            setLoading('regBtn', false);
+
+            if (result.success) {
+                showToast('Account created successfully! Please sign in.');
+                document.getElementById('registerForm').reset();
+                document.getElementById('strengthContainer').style.display = 'none';
+                switchTab('login');
+                document.getElementById('loginEmail').value = email;
+            } else {
+                showToast(result.error, 'error');
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            setLoading('loginBtn', true);
+            const result = await Backend.login(email, password);
+            setLoading('loginBtn', false);
+
+            if (result.success) {
+                if (result.requires2FA) {
+                    temp2FAUserId = result.userId;
+                    temp2FAEmail = result.email;
+                    switchTab('2fa');
+                    document.querySelector('.otp-input').focus();
+                } else {
+                    completeLogin(result);
+                }
+            } else {
+                showToast(result.error, 'error');
+                document.getElementById('loginForm').classList.add('shake');
+                setTimeout(() => document.getElementById('loginForm').classList.remove('shake'), 500);
+            }
+        }
+
+        function moveToNext(input, index) {
+            if (input.value.length === 1 && index < 5) {
+                document.querySelectorAll('.otp-input')[index + 1].focus();
+            }
+        }
+
+        async function handle2FAVerify(e) {
+            e.preventDefault();
+            const inputs = document.querySelectorAll('.otp-input');
+            const code = Array.from(inputs).map(i => i.value).join('');
+            
+            if (code.length !== 6) {
+                showToast('Please enter complete code', 'warning');
+                return;
+            }
+
+            const result = await Backend.verify2FA(temp2FAUserId, code);
+            
+            if (result.success) {
+                inputs.forEach(i => i.value = '');
+                completeLogin(result);
+            } else {
+                showToast(result.error, 'error');
+                inputs.forEach(i => {
+                    i.classList.add('border-red-500');
+                    setTimeout(() => i.classList.remove('border-red-500'), 1000);
+                });
+            }
+        }
+
+        function cancel2FA() {
+            temp2FAUserId = null;
+            temp2FAEmail = null;
+            document.querySelectorAll('.otp-input').forEach(i => i.value = '');
+            document.getElementById('tab-login').parentElement.classList.remove('hidden');
+            switchTab('login');
+        }
+
+        function completeLogin(result) {
+            currentUser = result.user;
+            localStorage.setItem('accessToken', result.accessToken);
+            localStorage.setItem('refreshToken', result.refreshToken);
+            
+            showToast(`Welcome back, ${result.user.name}!`);
+            updateDashboard();
+            switchTab('dashboard');
+            startTokenRefresh();
+        }
+
+        function updateDashboard() {
+            if (!currentUser) return;
+            
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userEmail').textContent = currentUser.email;
+            document.getElementById('userAvatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            
+            const token = localStorage.getItem('accessToken');
+            document.getElementById('tokenPreview').textContent = token ? token.substring(0, 20) + '...' : 'None';
+            
+            // Decode token for expiry
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const date = new Date(payload.exp * 1000);
+                document.getElementById('tokenExpiry').textContent = date.toLocaleTimeString();
+            } catch (e) {
+                document.getElementById('tokenExpiry').textContent = 'Invalid';
+            }
+
+            const twoFABtn = document.getElementById('toggle2FABtn');
+            const twoFAStatus = document.getElementById('twoFAStatus');
+            
+            if (currentUser.twoFAEnabled) {
+                twoFAStatus.textContent = 'Enabled';
+                twoFAStatus.className = 'text-xs text-green-600 dark:text-green-400 font-medium';
+                twoFABtn.textContent = 'Disable';
+                twoFABtn.className = 'px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium rounded-lg transition-colors';
+            } else {
+                twoFAStatus.textContent = 'Not enabled';
+                twoFAStatus.className = 'text-xs text-slate-500';
+                twoFABtn.textContent = 'Enable';
+                twoFABtn.className = 'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors';
+            }
+        }
+
+        // ==================== 2FA MANAGEMENT ====================
+
+        async function toggle2FA() {
+            if (currentUser.twoFAEnabled) {
+                if (confirm('Disable two-factor authentication? This makes your account less secure.')) {
+                    const result = await Backend.disable2FA(currentUser.id);
+                    if (result.success) {
+                        currentUser.twoFAEnabled = false;
+                        currentUser.twoFASecret = null;
+                        updateDashboard();
+                        showToast('2FA disabled successfully');
+                    }
+                }
+            } else {
+                const result = await Backend.setup2FA(currentUser.id);
+                if (result.success) {
+                    pending2FASecret = result.secret;
+                    document.getElementById('secretKey').textContent = result.secret;
+                    
+                    // Generate QR
+                    const qrContainer = document.getElementById('qrcode');
+                    qrContainer.innerHTML = '';
+                    new QRCode(qrContainer, {
+                        text: result.uri,
+                        width: 180,
+                        height: 180,
+                        colorDark: '#1e293b',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    
+                    switchTab('setup2fa');
+                }
+            }
+        }
+
+        function copySecret() {
+            const secret = document.getElementById('secretKey').textContent;
+            navigator.clipboard.writeText(secret);
+            showToast('Secret copied to clipboard', 'info');
+        }
+
+        async function verifySetup2FA(e) {
+            e.preventDefault();
+            const code = document.getElementById('setupCode').value;
+            
+            const result = await Backend.confirm2FASetup(currentUser.id, code, pending2FASecret);
+            
+            if (result.success) {
+                currentUser.twoFAEnabled = true;
+                currentUser.twoFASecret = pending2FASecret;
+                pending2FASecret = null;
+                document.getElementById('setupCode').value = '';
+                showToast('2FA enabled successfully!', 'success');
+                updateDashboard();
+                switchTab('dashboard');
+            } else {
+                showToast(result.error, 'error');
+            }
+        }
+
+        // ==================== TOKEN MANAGEMENT ====================
+
+        function startTokenRefresh() {
+            if (tokenRefreshInterval) clearInterval(tokenRefreshInterval);
+            
+            // Refresh 1 minute before expiry
+            tokenRefreshInterval = setInterval(async () => {
+                const token = localStorage.getItem('accessToken');
+                if (!token) return;
+                
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const now = Math.floor(Date.now() / 1000);
+                    
+                    if (payload.exp - now < 60) {
+                        const refreshToken = localStorage.getItem('refreshToken');
+                        if (refreshToken) {
+                            const result = await Backend.refreshAccessToken(refreshToken);
+                            if (result.success) {
+                                localStorage.setItem('accessToken', result.accessToken);
+                                updateDashboard();
+                                console.log('Token refreshed automatically');
+                            } else {
+                                logout();
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Token refresh error', e);
+                }
+            }, 30000); // Check every 30 seconds
+        }
+
+        async function refreshToken() {
+            const refreshToken = localStorage.getItem('refreshToken');
+            if (!refreshToken) {
+                showToast('No refresh token available', 'error');
+                return;
+            }
+            
+            const result = await Backend.refreshAccessToken(refreshToken);
+            if (result.success) {
+                localStorage.setItem('accessToken', result.accessToken);
+                updateDashboard();
+                showToast('Token refreshed successfully');
+            } else {
+                showToast('Failed to refresh token', 'error');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            if (tokenRefreshInterval) clearInterval(tokenRefreshInterval);
+            
+            document.getElementById('tab-login').parentElement.classList.remove('hidden');
+            switchTab('login');
+            showToast('Signed out successfully', 'info');
+        }
+
+        function showForgotPassword() {
+            showToast('Password reset link sent to your email', 'info');
+        }
+
+        // ==================== INIT ====================
+
+        // Check for existing session on load
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                const user = Backend.getUserByToken(token);
+                if (user) {
+                    currentUser = { ...user, password: undefined };
+                    updateDashboard();
+                    switchTab('dashboard');
+                    startTokenRefresh();
+                    showToast('Welcome back!', 'info');
+                } else {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                }
+            }
+        });
+
+        // Dark mode detection
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+</body>
+</html>
+
